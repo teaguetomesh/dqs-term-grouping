@@ -5,7 +5,7 @@ from setuptools import find_packages, setup
 __version__ = ""
 exec(open("dqs/_version.py").read())
 
-name = "Digital Quantum Simulation"
+name = "digital quantum simulation"
 
 description = "Improve the execution of Hamiltonian simulation algorithms by optimizing the program execution order"
 
@@ -16,9 +16,7 @@ long_description = io.open("README.md", encoding="utf-8").read()
 requirements = open("requirements.txt").readlines()
 requirements = [r.strip() for r in requirements]
 
-dqs_packages = ["dqs"] + [
-    "dqs." + package for package in find_packages(where="dqs")
-]
+dqs_packages = ["dqs"] + ["dqs." + package for package in find_packages(where="dqs")]
 
 # Sanity check
 assert __version__, "Version string cannot be empty"
@@ -26,7 +24,7 @@ assert __version__, "Version string cannot be empty"
 setup(
     name=name,
     version=__version__,
-    url="https://github.com/SupertechLabs/SuperstaQ",
+    url="https://github.com/TeagueTomesh/dqs-term-grouping",
     author="Teague Tomesh",
     author_email="ttomesh@princeton.edu",
     python_requires=(">=3.8.0"),
@@ -34,6 +32,6 @@ setup(
     license="N/A",
     description=description,
     long_description=long_description,
-    packages=superstaq_packages,
+    packages=dqs_packages,
     package_data={"dqs": ["py.typed"]},
 )
