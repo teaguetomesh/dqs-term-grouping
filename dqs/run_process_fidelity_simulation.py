@@ -71,8 +71,7 @@ def main():
     sys.path.append(DQSROOT)
 
     savepath = DQSROOT + 'benchmark_results/process_fidelity_simulation/'
-    if not os.path.isdir(savepath):
-        os.mkdir(savepath)
+    os.mkdirs(savepath, exist_ok=True)
 
     # Gather the Hamiltonians (either molecular or random)
     hamiltonians = []
