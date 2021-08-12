@@ -7,11 +7,12 @@ from typing import List, Sequence
 import numpy as np
 import scipy.linalg as linalg
 import qiskit
+from qiskit.providers import aer
 from qiskit.quantum_info import Operator, process_fidelity, SuperOp
-#from term_grouping import findMinCliqueCover, sort_all_tsp
 #from transpilation import apply_transpiler
-#from utils import parse_hamiltonian_file as phf
-#from utils import permutation_heuristic
+from . import hamiltonians
+from . import permutation_heuristic
+from . import term_grouping
 
 
 class Dynamics:
@@ -65,10 +66,10 @@ class Dynamics:
             # where
             #     coefs : int or float
             #     terms : IIIZZZ, XIXIZY, etc...
-            self.nq, self.H = phf.parseExactHstr(Hfile)
+            self.nq, self.H = hamiltonians.parseExactHstr(Hfile)
         else:
             # parse the Hamiltonian file
-            self.nq, self.H = phf.parseHfile(Hfile)
+            self.nq, self.H = hamiltonians.parseHfile(Hfile)
 
         # print('Total of {} terms in Hamiltonian'.format(len(self.H)))
         # print(self.H)
@@ -173,8 +174,8 @@ class Dynamics:
         for loc in Xlocs:
             circ.h(qreg[loc])
         for loc in Ylocs:
+            circ.sdg(qreg[loc])
             circ.h(qreg[loc])
-            circ.s(qreg[loc])
 
         return circ
 
@@ -205,8 +206,8 @@ class Dynamics:
         for loc in Xlocs:
             circ.h(qreg[loc])
         for loc in Ylocs:
-            circ.sdg(qreg[loc])
             circ.h(qreg[loc])
+            circ.s(qreg[loc])
 
         return circ
 
@@ -301,9 +302,9 @@ class Dynamics:
         iter_circ = qiskit.QuantumCircuit(qreg)
 
         for (a_j, S_j, t_j) in ts_bitstr:
-            iter_circ += self._compute_to_Z_basis(qreg, S_j)
-            iter_circ += self._apply_phase_shift(qreg, a_j * t_j, S_j, mode)
-            iter_circ += self._uncompute_to_Z_basis(qreg, S_j)
+            iter_circ.compose(self._compute_to_Z_basis(qreg, S_j), inplace=True)
+            iter_circ.compose(self._apply_phase_shift(qreg, a_j * t_j, S_j, mode), inplace=True)
+            iter_circ.compose(self._uncompute_to_Z_basis(qreg, S_j), inplace=True)
             if barriers:
                 iter_circ.barrier()
 
@@ -364,7 +365,7 @@ class Dynamics:
             QuantumCircuit object with width = nq
         """
         # print out the current configuration of the Hamiltonian
-        print("Hamiltonian currently sorted by:", self.sort_type)
+        # print("Hamiltonian currently sorted by:", self.sort_type)
         # print('H =', self.H_withoutCo)
 
         # Check that a correct mode is set
@@ -387,15 +388,15 @@ class Dynamics:
         m = self.get_num_groups()
         max_coef_val = max([abs(term[0]) for term in self.H])
 
-        print("Trotter-Suzuki order, chi = {}".format(chi))
-        print("\tt = {}, r = {}".format(t, r))
+        # print("Trotter-Suzuki order, chi = {}".format(chi))
+        # print("\tt = {}, r = {}".format(t, r))
 
         iterate_bitstr = self._trotter_suzuki(H_bitstr, chi, t / r)
-        print(
-            "\tProduced Trotter-Suzuki decomposition: order={}, len={}".format(
-                chi, len(iterate_bitstr)
-            )
-        )
+        # print(
+        #    "\tProduced Trotter-Suzuki decomposition: order={}, len={}".format(
+        #        chi, len(iterate_bitstr)
+        #    )
+        # )
 
         # If we plan on using the star+ancilla optimization, we must insert
         # barriers during generation, they will be removed after optimization
@@ -410,7 +411,7 @@ class Dynamics:
         self.iterate_circ_copy = iterate_circuit
 
         for n in range(r):
-            circ += iterate_circuit
+            circ.compose(iterate_circuit, inplace=True)
 
         if transpile is None:
             # set the current class circuit equal to the generated circ
@@ -470,14 +471,14 @@ class Dynamics:
             self.sortedH = [[h] for h in sorted(self.H, key=lambda x: x[1])]
         elif sort_type in ["all_tsp", "full_tsp"]:
             # Sort entire Hamiltonian via TSP heuristic
-            all_tsp_H = sort_all_tsp(self.H, mode, print_info=print_info)
+            all_tsp_H = term_grouping.sort_all_tsp(self.H, mode, print_info=print_info)
             self.sortedH = [[h] for h in all_tsp_H]
         elif sort_type in ["max_commute", "mc"]:
-            self.sortedH = findMinCliqueCover(
+            self.sortedH = term_grouping.findMinCliqueCover(
                 rng.permutation(self.H), self.nq, "GC", coverFunc, print_info=print_info
             )
         elif sort_type in ["max_commute_w_tsp", "mc_w_tsp", "mc_tsp", "max_commute_tsp"]:
-            max_commute_H = findMinCliqueCover(
+            max_commute_H = term_grouping.findMinCliqueCover(
                 rng.permutation(self.H),
                 self.nq,
                 "GC",
@@ -492,7 +493,7 @@ class Dynamics:
                 # use the permutation heuristic
                 self.sortedH = permutation_heuristic.gen_heuristic(max_commute_H)
         elif sort_type in ["max_commute_w_random", "mc_w_rand", "mc_rand"]:
-            max_commute_H = findMinCliqueCover(
+            max_commute_H = term_grouping.findMinCliqueCover(
                 rng.permutation(self.H), self.nq, "GC", coverFunc, print_info=print_info
             )
             max_commute_random_H = []
@@ -501,12 +502,12 @@ class Dynamics:
                 max_commute_random_H.append(group)
             self.sortedH = max_commute_random_H
         elif sort_type in ["max_commute_lex", "mc_w_lex", "mc_lex"]:
-            max_commute_H = findMinCliqueCover(
+            max_commute_H = term_grouping.findMinCliqueCover(
                 rng.permutation(self.H), self.nq, "GC", coverFunc, print_info=print_info, mode=mode
             )
             self.sortedH = [sorted(group, key=lambda x: x[1]) for group in max_commute_H]
         elif sort_type in ["max_commute_w_mag", "mc_w_mag", "mc_mag"]:
-            max_commute_H = findMinCliqueCover(
+            max_commute_H = term_grouping.findMinCliqueCover(
                 rng.permutation(self.H), self.nq, "GC", coverFunc, print_info=print_info
             )
             self.sortedH = [
@@ -520,7 +521,7 @@ class Dynamics:
         elif sort_type in ["depletegroups", "deplete_groups", "dg"]:
             # implement the depleteGroups strategy from Tranter, et. al. 2019
             # Link: https://www.mdpi.com/1099-4300/21/12/1218
-            max_commute_H = findMinCliqueCover(
+            max_commute_H = term_grouping.findMinCliqueCover(
                 rng.permutation(self.H), self.nq, "GC", coverFunc, print_info=print_info
             )
             max_commute_H = sorted(max_commute_H, key=lambda x: len(x), reverse=True)
@@ -652,7 +653,7 @@ class Dynamics:
         U : numpy array
             Matrix representation of the quantum circuit
         """
-        unitarysimulator = qiskit.Aer.aer.get_backend("unitary_simulator")
+        unitarysimulator = aer.Aer.get_backend("unitary_simulator")
         # return execute(circ, unitarysimulator).result().get_unitary(circ)
 
         # compute sum of the global phases appearing in a single TS iteration
@@ -663,7 +664,7 @@ class Dynamics:
         if iterateUnitary:
             # Obtain the circuit unitary for a single TS iteration using the
             # Qiskit unitary_simulator backend
-            print("Calculating iterateUnitary")
+            #print("Calculating iterateUnitary")
             # U = Operator(self.iterate_circ_copy).data
             result = qiskit.execute(self.iterate_circ_copy, unitarysimulator).result()
             U = result.get_unitary(self.iterate_circ_copy)
@@ -673,7 +674,7 @@ class Dynamics:
         else:
             # Obtain the circuit unitary for the full TS decomposition using the
             # Qiskit unitary_simulator backend
-            print("Calculating fullCircuitUnitary")
+            #print("Calculating fullCircuitUnitary")
             # U = Operator(self.full_circ_copy).data
             result = qiskit.execute(self.full_circ_copy, unitarysimulator).result()
             U = result.get_unitary(self.full_circ_copy)
