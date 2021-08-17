@@ -125,7 +125,7 @@ def random_H(num_qubits, num_terms, binary=True):
             pauli_str = ''
             for _ in range(num_qubits):
                 pauli_str += np.random.choice(['I', 'X', 'Y', 'Z'])
-            if pauli_str not in [term[1] for term in H]:
+            if pauli_str not in [term[1] for term in H] and pauli_str != 'I'*num_qubits:
                 break
 
         H.append((coef, pauli_str))
