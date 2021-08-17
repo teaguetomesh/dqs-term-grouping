@@ -70,7 +70,7 @@ def main():
         DQSROOT += '/'
     sys.path.append(DQSROOT)
 
-    savepath = DQSROOT + 'benchmark_results/process_fidelity_simulation/'
+    savepath = DQSROOT + f'benchmark_results/process_fidelity_simulation/{args.nq}qubits/'
     os.makedirs(savepath, exist_ok=True)
 
     # Gather the Hamiltonians (either molecular or random)
