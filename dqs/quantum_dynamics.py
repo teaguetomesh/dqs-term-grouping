@@ -2,7 +2,7 @@ import math
 import queue
 import random
 from copy import deepcopy
-from typing import List, Sequence
+from typing import List, Sequence, Tuple, Union
 
 import numpy as np
 import scipy.linalg as linalg
@@ -54,25 +54,26 @@ class Dynamics:
         full TS-decomposition circuit
     """
 
-    def __init__(self, Hfile: str) -> None:
+    def __init__(self, Hamiltonian: Union[str, List]) -> None:
 
-        if "EXACT:" in Hfile:
-            # as a useful debugging option, the Hamiltonian can be manually
-            # specified. When initializing the Dynamics object, be sure to
-            # strictly follow the format:
-            #
-            #     Hfile = 'EXACT: (coef1)term1 + (coef2)term2 + ...
-            #
-            # where
-            #     coefs : int or float
-            #     terms : IIIZZZ, XIXIZY, etc...
-            self.nq, self.H = hamiltonians.parseExactHstr(Hfile)
+        if isinstance(Hamiltonian, str):
+            if "EXACT:" in H:
+                # as a useful debugging option, the Hamiltonian can be manually
+                # specified. When initializing the Dynamics object, be sure to
+                # strictly follow the format:
+                #
+                #     Hfile = 'EXACT: (coef1)term1 + (coef2)term2 + ...
+                #
+                # where
+                #     coefs : int or float
+                #     terms : IIIZZZ, XIXIZY, etc...
+                self.nq, self.H = hamiltonians.parseExactHstr(Hamiltonian)
+            else:
+                # parse the Hamiltonian file
+                self.nq, self.H = hamiltonians.parseHfile(Hamiltonian)
         else:
-            # parse the Hamiltonian file
-            self.nq, self.H = hamiltonians.parseHfile(Hfile)
-
-        # print('Total of {} terms in Hamiltonian'.format(len(self.H)))
-        # print(self.H)
+            self.nq = len(Hamiltonian[0][1])
+            self.H = Hamiltonian
 
         # initialize self.sortedH
         self.sort_hamiltonian("GIVEN")
@@ -87,6 +88,15 @@ class Dynamics:
         for group in self.sortedH:
             for term in group:
                 H += [term[1]]
+        return H
+
+    def _getH_without_groups(self) -> List[Tuple[float, str]]:
+        H = []
+        if self.sortedH is None:
+            return []
+        for group in self.sortedH:
+            for term in group:
+                H.append(term)
         return H
 
     def _get_H_bitstr(self) -> Sequence:
@@ -117,6 +127,30 @@ class Dynamics:
                 H_bitstr += [(float(a_j), S_j)]
 
         return H_bitstr
+
+    def update_coefficients(self, updated_hamiltonian: List[Tuple[float, str]]) -> None:
+        pauli_coeffs = {term[1]: term[0] for term in updated_hamiltonian}
+
+        # Update the sorted Hamiltonian
+        new_hamiltonian = []
+        for group in self.sortedH:
+            new_group = []
+            for term in group:
+                try:
+                    new_group.append((pauli_coeffs[term[1]], term[1]))
+                except KeyError:
+                    raise KeyError(f"The current Hamiltonian does not contain the term: {term[1]}")
+            new_hamiltonian.append(new_group)
+        self.sortedH = new_hamiltonian
+
+        # Update the unsorted Hamiltonian
+        new_hamiltonian = []
+        for term in self.H:
+            try:
+                new_hamiltonian.append((pauli_coeffs[term[1]], term[1]))
+            except KeyError:
+                raise KeyError(f"The current Hamiltonian does not contain the term: {term[1]}")
+        self.H = new_hamiltonian
 
     def compare_H_reps(self, H_bitstr: List) -> None:
         for i, (H_regrep, H_bstr) in enumerate(zip(self.H, H_bitstr)):
@@ -436,7 +470,7 @@ class Dynamics:
         self,
         sort_type: str = "LEXICOGRAPHIC",
         coverFunc: str = "rlf",
-        print_info: bool = True,
+        print_info: bool = False,
         random_permutation: bool = False,
         mode: str = "star",
     ) -> None:
