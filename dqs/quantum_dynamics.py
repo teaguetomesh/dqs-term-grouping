@@ -8,7 +8,7 @@ import numpy as np
 import scipy.linalg as linalg
 import qiskit
 from qiskit.providers import aer
-from qiskit.quantum_info import Operator, process_fidelity, SuperOp
+from qiskit.quantum_info import Choi, diamond_norm, Operator, process_fidelity, SuperOp
 #from transpilation import apply_transpiler
 from . import hamiltonians
 from . import permutation_heuristic
@@ -798,6 +798,24 @@ class Dynamics:
 
         channel = SuperOp(Operator(anc0subspace))
         return round(process_fidelity(channel, target=target), 4)
+
+
+    def diamondNorm(self, Uexact: np.ndarray, Uapprox: np.ndarray) -> float:
+        """
+        Compute the diamond norm between the circuit and exact unitaries.
+
+            D(e,u) = ||C(Uexact) - C(Uapprox)||
+
+        Where C(*) indicates the Choi representation of the quantum channel, and
+        ||*|| indicates the diamond norm.
+        """
+        # Generate target Choi
+        target = Choi(Uexact)
+
+        # Generate the input quantum channel
+        experiment = Choi(Uapprox)
+
+        return round(diamond_norm(target - experiment), 6)
 
 
 # if __name__ == "__main__":
