@@ -818,7 +818,17 @@ class Dynamics:
         return round(diamond_norm(target - experiment), 6)
 
 
-    def total_cnot_distance(self, r: int = 1) -> int:
+    def _cnot_distance(self, pauli_str_1: str, pauli_str_2: str) -> int:
+        distance = 0
+        for pauli_1, pauli_2 in zip(pauli_str_1, pauli_str_2):
+            if pauli_1 != pauli_2:
+                distance += 1
+                if pauli_1 != 'I' and pauli_2 != 'I':
+                    distance += 1
+        return distance
+
+
+    def total_cnot_count(self, r: int = 1) -> int:
         """
         Compute the total number of CNOT gates needed to implement the Trotter circuit
         with r repetitions.
@@ -832,13 +842,13 @@ class Dynamics:
                 cnot_count += 1
 
         # Add the CNOTs between each pair of terms
+        inter_cnot_distance = 0
         for i in range(len(H) - 1):
-            term_1, term_2 = H[i][1], H[i+1][1]
-            for pauli_1, pauli_2 in zip(term_1, term_2):
-                if pauli_1 != pauli_2:
-                    cnot_count += 1
-                    if pauli_1 != 'I' and pauli_2 != 'I':
-                        cnot_count += 1
+            inter_cnot_distance += self._cnot_distance(H[i][1], H[i+1][1])
+        cnot_count += r * inter_cnot_distance
+
+        if r > 1:
+            cnot_count += (r - 1) * self._cnot_distance(H[-1][1], H[0][1])
 
         # Add the CNOTs incurred by the parity-uncompute of the last term
         for pauli_matrix in H[-1][1]:
