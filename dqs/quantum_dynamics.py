@@ -57,7 +57,7 @@ class Dynamics:
     def __init__(self, Hamiltonian: Union[str, List]) -> None:
 
         if isinstance(Hamiltonian, str):
-            if "EXACT:" in H:
+            if "EXACT:" in Hamiltonian:
                 # as a useful debugging option, the Hamiltonian can be manually
                 # specified. When initializing the Dynamics object, be sure to
                 # strictly follow the format:
